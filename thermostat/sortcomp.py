@@ -7,11 +7,8 @@ import logging
 import math
 import pandas
 
-from utils import random_permutation
-
-log = logging.getLogger()
-log.setLevel(logging.DEBUG)
-log = logging
+from .utils import random_permutation
+from . import log
 
 
 def sorting_process_sample(N, T, sampleid, steps, rndseed, constructor, constructor_kwargs={}, name=None):

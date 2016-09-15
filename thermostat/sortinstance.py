@@ -1,5 +1,7 @@
 import random
 
+from . import log
+
 class SortingInstance:
 
     def __init__(self, values):

@@ -13,8 +13,7 @@ import seaborn as sns
 import scipy.stats.kde
 import logging
 
-from utils import SimpleMemoClass, random_permutation
-
+from .utils import SimpleMemoClass, random_permutation
 from . import log
 
 class StatProcessState(SimpleMemoClass):
