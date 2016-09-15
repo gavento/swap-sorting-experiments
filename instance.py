@@ -12,18 +12,19 @@ class SortingInstance:
         self.ops = 0
         self.result = None
 
+    def get_values(self):
+        return self.values[:]
+
     def cmp(self, a, b):
         """
-        Compare element values: v[a] vs v[b].
-        Return -1, 0 or +1 when va<vb, va=vb or va>vb.
+        Compare a vs b.
+        Return -1, 0 or +1 when a<b, a=b or a>b.
         """
         self.cmps += 1
         self.op()
-        va = self.values[a]
-        vb = self.values[b]
-        if (va < vb):
+        if (a < b):
             return -1
-        if (va > vb):
+        if (a > b):
             return 1
         return 0
 
@@ -39,8 +40,8 @@ class SortingInstance:
         assert(len(array) == self.n)
         self.result = array
 
-    def dislocation(self, value, index):
-        return abs(self.values_rank[value] - index)
+    def dislocation(self, a, index):
+        return abs(self.values_rank[a] - index)
 
     def total_dislocation(self, result=None):
         if not result:
@@ -74,10 +75,8 @@ class IndependentErrorInstance(SortingInstance):
     def cmp(self, a, b):
         self.cmps += 1
         self.op()
-        va = self.values[a]
-        vb = self.values[b]
-        if va == vb: return 0
-        if (va < vb) == (random.random() >= self.p_err):
+        if a == b: return 0
+        if (a < b) == (random.random() >= self.p_err):
             return -1
         return 1
 
@@ -93,14 +92,12 @@ class RepeatedErrorInstance(IndependentErrorInstance):
     def cmp(self, a, b):
         self.cmps += 1
         self.op()
-        va = self.values[a]
-        vb = self.values[b]
-        if va == vb: return 0
-        l = min(a,b)
-        u = max(a,b)
-        if (l,u) not in self.comparison_ok:
-            self.comparison_ok[(l,u)] = (random.random() >= self.p_err)
-        if (va < vb) == self.comparison_ok[(l,u)]:
+        if a == b: return 0
+        l = min(a, b)
+        u = max(a, b)
+        if (l, u) not in self.comparison_ok:
+            self.comparison_ok[(l, u)] = (random.random() >= self.p_err)
+        if (a < b) == self.comparison_ok[(l, u)]:
             return -1
         return 1
 
