@@ -13,38 +13,11 @@ import seaborn as sns
 import scipy.stats.kde
 import logging
 
-log = logging.getLogger()
-log.setLevel(logging.DEBUG)
-log = logging
+from utils import SimpleMemoClass, random_permutation
 
-def random_permutation(n, rnd=None):
-    rnd = rnd or random
-    l = list(range(n))
-    rnd.shuffle(l)
-    return l
+from . import log
 
-class SimpleCachingClass:
-
-    def __init__(self):
-        self._cache = {}
-
-    def invalidate_cache(self):
-        self._cache = {}
-
-    @classmethod
-    def _cached(cls, meth):
-        functools.wraps(meth)
-        def newmeth(self):
-            name = meth.__name__
-            if name in self._cache:
-                return self._cache[name]
-            val = meth(self)
-            self._cache[name] = val
-            return val
-        return newmeth
-
-
-class StatProcessState(SimpleCachingClass):
+class StatProcessState(SimpleMemoClass):
 
     def __init__(self, state=None, params={}, rnd=None, T=1.0, steps=0, size=1):
         super().__init__()
@@ -68,7 +41,7 @@ class StatProcessState(SimpleCachingClass):
     def __repr__(self):
         return "<%s [%d] @%d T=%.3e E=%.3e>" % (self.__class__.__name__, self.size, self.steps, self.T, self.E())
 
-    @SimpleCachingClass._cached
+    @SimpleMemoClass._cached
     def E(self):
         raise NotImplemented
 
@@ -95,18 +68,18 @@ class SortingProcessState(StatProcessState):
     def dislocation(self, v, idx):
         return abs(idx - self.data_rank[v])
 
-    @SimpleCachingClass._cached
+    @SimpleMemoClass._cached
     def total_dislocation(self):
         return sum(self.dislocation(v, i) for i, v in enumerate(self.state))
 
     def weighted_dislocation(self, v, idx):
         return v * (self.data_rank[v] - idx)
 
-    @SimpleCachingClass._cached
+    @SimpleMemoClass._cached
     def total_weigted_dislocation(self):
         return sum(self.weighted_dislocation(v, i) for i, v in enumerate(self.state))
 
-    @SimpleCachingClass._cached
+    @SimpleMemoClass._cached
     def total_inversions(self):
         return 0 # TODO
 
@@ -255,6 +228,7 @@ def DF_for_ranges(sizes, Ts, samples, steps, rnd=None, **kwargs):
 #        rnd2 = random.Random(str(rnd.getstate()) + str((size, T, sample)))
         rnd2 = random.Random()
         jobs.append(joblib.delayed(DF_for_ranges__getrows)(size, T, sample, steps, rnd2, **kwargs))
+    log.info("Submitting %d jobs ...", len(jobs))
     res = parallel(jobs)
 
     df = pandas.DataFrame(np.array(list(itertools.chain(*res))), columns=['size', 'T', 'sample', 'step', 'E', 'Eexp'])
@@ -263,7 +237,7 @@ def DF_for_ranges(sizes, Ts, samples, steps, rnd=None, **kwargs):
 def plot_ranges_by_steps(sizes, Ts, samples, steps, rnd=None, **kwargs):
     df = DF_for_ranges(sizes, Ts, samples, steps, rnd=rnd, **kwargs)
     for size in df['size'].unique():
-        ax = sns.tsplot(df[df['size'] == size], time='step', value='Eexp', ci=[68, 90], unit='sample', condition='T', err_style='ci_band', estimator=np.mean)
+        ax = sns.tsplot(df[df['size'] == size], time='step', value='Eexp', ci=[68, 95], unit='sample', condition='T', err_style='ci_band', estimator=np.mean)
         ax.set_title('Energy exponent (of N) by time, N=%d, %d samples, percentiles: 68, 90' % (size, len(df['sample'].unique())))
         ax.set_ylim([0, 3])
         sns.plt.show()
