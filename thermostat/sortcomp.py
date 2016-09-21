@@ -1,5 +1,6 @@
 import joblib
 import seaborn as sns
+import matplotlib.pyplot as plt
 import numpy as np
 import random
 import itertools
@@ -62,9 +63,9 @@ def sorting_process_for_ranges(Ns, Ts, samples, steps, rndseed='42', name=None, 
         jobs.append(joblib.delayed(sorting_process_sample)(process, sample, steps, name))
 
     log.info("Submitting %d jobs ...", len(jobs))
-    res = [f(*args, **kwargs) for f, args, kwargs in jobs]
-#   parallel = joblib.Parallel(n_jobs = -1, verbose = 5)
-#   res = parallel(jobs)
+    #res = [f(*args, **kwargs) for f, args, kwargs in jobs]
+    parallel = joblib.Parallel(n_jobs = -1, verbose = 5)
+    res = parallel(jobs)
 
     return pandas.concat(res, ignore_index=True, copy=False)
     
@@ -76,38 +77,41 @@ def plot_sorting_process(df, value='log_N(E)', title=None, ymax=None, ax=None):
     ax.set_title(title or 'Energy by the number of steps, %d samples, percentiles: 68, 95' % len(df['sample'].unique()))
     ax.set_ylim([0, ymax or int(math.ceil(max(1, df[value].max())))])
     return ax
-    
+
+
+
 def main():
-    Ns = 500
-    Ts = [1.5 ** i for i in range(16)]
+    Ns = 100
+    Ts = [1.5 ** i for i in range(14)]
     samples = 50
-    steps = 1000000
+    steps = 10000
+
+    def comp(recurrent_err, swap_any, error_type, measure):
+        name = "%s_%s_%s_%s" % (measure.name, error_type.name, ["IND", "REC"][recurrent_err],
+                ["ADJ", "ANY"][swap_any])
+        fname = "N%d_step%d_%s" % (Ns, steps, name)
+        df = sorting_process_for_ranges(Ns=Ns, Ts=Ts, samples=samples, steps=steps, name=name,
+                recurrent_err=recurrent_err, swap_any=swap_any, error_type=error_type, measure=measure)
+        df.to_pickle(fname + '.pickle')
+        plt.figure(figsize=(24, 15))
+        plot_sorting_process(df)
+        plt.savefig(fname + '.png', bbox_inches='tight', dpi=200)
 
     # ADJ
 
-    sorting_process_for_ranges(Ns=Ns, Ts=Ts, samples=samples, steps=steps,
-        recurrent_err=False, swap_any=False, error_type=ErrorCostType.VALUE_DIST, measure=DisorderMeasure.W_DISLOC,
-        name="WD-INDEP-ADJ").to_pickle("DF-N500-1Msteps-WD-INDEP-ADJ.pickle")
+    comp(recurrent_err=False, swap_any=False, error_type=ErrorCostType.VALUE_DIST, measure=DisorderMeasure.W_DISLOC)
     
-    sorting_process_for_ranges(Ns=Ns, Ts=Ts, samples=samples, steps=steps,
-        recurrent_err=True, swap_any=False, error_type=ErrorCostType.VALUE_DIST, measure=DisorderMeasure.W_DISLOC,
-        name="WD-REC-ADJ").to_pickle("DF-N500-1Msteps-WD-REC-ADJ.pickle")
+    comp(recurrent_err=True, swap_any=False, error_type=ErrorCostType.VALUE_DIST, measure=DisorderMeasure.W_DISLOC)
 
-    # ANY - revers. (only indep)
+    # ANY - reversible (only indep)
 
-    sorting_process_for_ranges(Ns=Ns, Ts=Ts, samples=samples, steps=steps,
-        recurrent_err=False, swap_any=True, error_type=ErrorCostType.VALUE_DIST, measure=DisorderMeasure.W_DISLOC,
-        name="WD-INDEP-ANY").to_pickle("DF-N500-1Msteps-WD-INDEP-ANY.pickle")
+    comp(recurrent_err=False, swap_any=True, error_type=ErrorCostType.VALUE_DIST, measure=DisorderMeasure.W_DISLOC)
 
-    # ANY - nonrev, VALUE only
+    # ANY - nonreversible, error by VALUE only
 
-    sorting_process_for_ranges(Ns=Ns, Ts=Ts, samples=samples, steps=steps,
-        recurrent_err=False, swap_any=True, error_type=ErrorCostType.VALUE, measure=DisorderMeasure.W_DISLOC,
-        name="WD-INDEP-ANY err~diff").to_pickle("DF-N500-1Msteps-WD-INDEP-ANY-DIFFerr.pickle")
+    comp(recurrent_err=False, swap_any=True, error_type=ErrorCostType.VALUE, measure=DisorderMeasure.W_DISLOC)
 
-    sorting_process_for_ranges(Ns=Ns, Ts=Ts, samples=samples, steps=steps,
-        recurrent_err=True, swap_any=True, error_type=ErrorCostType.VALUE, measure=DisorderMeasure.W_DISLOC,
-        name="WD-REC-ANY err~diff").to_pickle("DF-N500-1Msteps-WD-REC-ANY-DIFFerr.pickle")
+    comp(recurrent_err=True, swap_any=True, error_type=ErrorCostType.VALUE, measure=DisorderMeasure.W_DISLOC)
 
 
 
