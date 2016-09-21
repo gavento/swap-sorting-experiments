@@ -1,4 +1,5 @@
 import random
+import math
 import functools
 
 def random_permutation(n, rnd=None):
@@ -10,6 +11,26 @@ def random_permutation(n, rnd=None):
     l = list(range(n))
     rnd.shuffle(l)
     return l
+
+
+def p_err_for_T(T, W=1):
+    "Compute error probability for given temperature and energy difference."
+    assert T >= 0.0 - 1e-14
+    if math.isinf(T) or T > 1e100:
+        return 0.5
+    if T < 1e-100:
+        return 0.0
+    ewt = math.exp(-W / T)
+    return ewt / (1.0 + ewt)
+
+def T_for_p_err(p_err, W=1):
+    "Compute corresponding temperature for given energy difference and error probability."
+    assert p_err <= 0.5 + 1e-14 and p_err >= 0.0 - 1e-14
+    if p_err < 1e-320:
+        return 0.0
+    if p_err > 0.5 - 1e-15:
+        return math.inf
+    return -W / (math.log(p_err / (1 - p_err)))
 
 
 class SimpleMemoClass:
