@@ -8,7 +8,7 @@ import logging
 import math
 import pandas
 
-from .utils import random_permutation
+from .utils import random_permutation, write_pickle_xz, read_pickle_xz
 from .sortinstance import RepeatedErrorInstance, IndependentErrorInstance
 from .statprocess import SortingProcess
 from . import log, ErrorCostType, DisorderMeasure
@@ -82,36 +82,79 @@ def plot_sorting_process(df, value='log_N(E)', title=None, ymax=None, ax=None):
 
 def main():
     Ns = 100
-    Ts = [1.5 ** i for i in range(14)]
+    Ts = [2 ** (i / 2.) for i in range(16)]
     samples = 50
-    steps = 10000
+    steps = 50000
+    ress = []
 
     def comp(recurrent_err, swap_any, error_type, measure):
         name = "%s_%s_%s_%s" % (measure.name, error_type.name, ["IND", "REC"][recurrent_err],
                 ["ADJ", "ANY"][swap_any])
-        fname = "N%d_step%d_%s" % (Ns, steps, name)
+        fname = "N%d_steps%d_%s" % (Ns, steps, name)
         df = sorting_process_for_ranges(Ns=Ns, Ts=Ts, samples=samples, steps=steps, name=name,
                 recurrent_err=recurrent_err, swap_any=swap_any, error_type=error_type, measure=measure)
-        df.to_pickle(fname + '.pickle')
-        plt.figure(figsize=(24, 15))
+        write_pickle_xz(df, fname + '.pickle.xz')
+        ress.append(df)
+        plt.figure(figsize=(20, 20 * (9.0 / 16)))
         plot_sorting_process(df)
         plt.savefig(fname + '.png', bbox_inches='tight', dpi=200)
+        
 
-    # ADJ
+    mWDIS = DisorderMeasure.WDISLOC
+    mDIS = DisorderMeasure.DISLOC
+    mINV = DisorderMeasure.INV
+    eVAL = ErrorCostType.VALUE
+    e1 = ErrorCostType.UNIT
 
-    comp(recurrent_err=False, swap_any=False, error_type=ErrorCostType.VALUE_DIST, measure=DisorderMeasure.W_DISLOC)
+    ## WDIS
+
+    # ADJ - reversible
+
+    comp(recurrent_err=False, swap_any=False, error_type=eVAL, measure=mWDIS)
     
-    comp(recurrent_err=True, swap_any=False, error_type=ErrorCostType.VALUE_DIST, measure=DisorderMeasure.W_DISLOC)
+    comp(recurrent_err=True, swap_any=False, error_type=eVAL, measure=mWDIS)
 
     # ANY - reversible (only indep)
 
-    comp(recurrent_err=False, swap_any=True, error_type=ErrorCostType.VALUE_DIST, measure=DisorderMeasure.W_DISLOC)
+    comp(recurrent_err=False, swap_any=True, error_type=ErrorCostType.VALUEDIST, measure=mWDIS)
 
-    # ANY - nonreversible, error by VALUE only
+    # ANY - nonreversible (errortype by VALUE only)
 
-    comp(recurrent_err=False, swap_any=True, error_type=ErrorCostType.VALUE, measure=DisorderMeasure.W_DISLOC)
+    comp(recurrent_err=False, swap_any=True, error_type=eVAL, measure=mWDIS)
 
-    comp(recurrent_err=True, swap_any=True, error_type=ErrorCostType.VALUE, measure=DisorderMeasure.W_DISLOC)
+    comp(recurrent_err=True, swap_any=True, error_type=eVAL, measure=mWDIS)
+
+    ## DIS
+
+    # ADJ - nonreversible
+
+    comp(recurrent_err=False, swap_any=False, error_type=e1, measure=mDIS)
+    
+    comp(recurrent_err=True, swap_any=False, error_type=e1, measure=mDIS)
+
+    # ANY - nonreversible
+
+    comp(recurrent_err=False, swap_any=True, error_type=e1, measure=mDIS)
+
+    comp(recurrent_err=True, swap_any=True, error_type=e1, measure=mDIS)
+
+    ## INV
+
+    # ADJ - reversible
+
+    comp(recurrent_err=False, swap_any=False, error_type=e1, measure=mINV)
+    
+    comp(recurrent_err=True, swap_any=False, error_type=e1, measure=mINV)
+
+    # ANY - nonreversible
+
+    comp(recurrent_err=False, swap_any=True, error_type=e1, measure=mINV)
+
+    comp(recurrent_err=True, swap_any=True, error_type=e1, measure=mINV)
+
+
+    allres = pandas.concat(ress, ignore_index=True, copy=False)
+    write_pickle_xz(allres, "N%d_steps%d_all.pickle.xz" % (Ns, steps))
 
 
 

@@ -8,7 +8,7 @@ log = logging
 class DisorderMeasure(enum.Enum):
     INV = 1
     DISLOC = 2
-    W_DISLOC = 3
+    WDISLOC = 3
 
 
 class ErrorCostType(enum.Enum):
@@ -19,7 +19,7 @@ class ErrorCostType(enum.Enum):
     * VALUE:
         The error probability depends on the value difference exponentially,
         as if the energy difference was the value difference.
-    * VALUE_DIST: 
+    * VALUEDIST: 
         The error probability depends on the value and distance of compared
         items, as if energy difference was `dist * (a - b)`.
         This allows for reversible chain with non-adjacent swaps.
@@ -30,7 +30,7 @@ class ErrorCostType(enum.Enum):
     """
     UNIT = 0
     VALUE = 1
-    VALUE_DIST = 2
+    VALUEDIST = 2
     DIST = 3
 
 from . import sortinstance, utils, statprocess, sortcomp

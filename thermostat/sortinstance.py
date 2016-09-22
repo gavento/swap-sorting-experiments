@@ -127,7 +127,7 @@ class IndependentErrorInstance(SortingInstance):
     two states (swapped ot not). For some swap operations and energy costs, this is
     consistent with a statistical physics model of the permutation space.
     The energy cost is given by ErrorCostType.
-    For VALUE_DIST, the distance of the compared elements matters as well.
+    For VALUEDIST, the distance of the compared elements matters as well.
     """ 
 
     def __init__(self, values, rnd=None, p_err=None, T=None, error_cost=ErrorCostType.UNIT):
@@ -152,7 +152,7 @@ class IndependentErrorInstance(SortingInstance):
             return b - a
         elif self.error_cost == ErrorCostType.DIST:
             return dist if a < b else -dist
-        elif self.error_cost == ErrorCostType.VALUE_DIST:
+        elif self.error_cost == ErrorCostType.VALUEDIST:
             return dist * (b - a)
         else:
             raise ValueError("Invalid energy_cost")
@@ -193,8 +193,8 @@ class RepeatedErrorInstance(IndependentErrorInstance):
         self.comparison_result = {}
 
     def cmp(self, a, b, dist=1):
-        if self.error_cost in (ErrorCostType.VALUE_DIST, ErrorCostType.DIST) and dist != 1:
-            raise ValueError("Can not combine RepeatedErrorInstance, VALUE_DIST (or DIST) error type and cmp(dist >= 2)")
+        if self.error_cost in (ErrorCostType.VALUEDIST, ErrorCostType.DIST) and dist != 1:
+            raise ValueError("Can not combine RepeatedErrorInstance, VALUEDIST (or DIST) error type and cmp(dist >= 2)")
         if (a, b) not in self.comparison_result:
             res = super().cmp(a, b, dist=dist)
             self.comparison_result[(a, b)] = res

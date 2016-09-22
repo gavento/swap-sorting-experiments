@@ -87,7 +87,7 @@ class SortingProcess(StatProcess):
             return self.total_inversions()
         elif self.measure == DisorderMeasure.DISLOC:
             return self.total_dislocation()
-        elif self.measure == DisorderMeasure.W_DISLOC:
+        elif self.measure == DisorderMeasure.WDISLOC:
             return self.total_weigted_dislocation()
         else:
             raise ValueError("Invalid disorder measure")

@@ -1,6 +1,17 @@
 import random
 import math
 import functools
+import lzma
+import pickle
+
+def write_pickle_xz(obj, fname):
+    with lzma.open(fname, mode='wb', preset=4) as f:
+        return pickle.dump(obj, f, protocol=-1)
+
+def read_pickle_xz(fname):
+    with lzma.open(fname, mode='rb') as f:
+        return pickle.load(f)
+
 
 def random_permutation(n, rnd=None):
     """
