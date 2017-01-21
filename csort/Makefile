@@ -8,6 +8,6 @@ clean:
 	rm -f csort.so csort.o
 
 test: csort.so
-	python3 -c "import csort; rs=csort.RandomSort(0.1, 1, [6, 3, 4, 8, 7, 1]); assert rs.n == 6;"
+	python3 -c "import csort; rs=csort.RandomSort(0.1, 1, 100); rs.steps(200); assert rs.n == 100; assert len(rs.Is) == len(rs.Ws)"
 
 .PHONY: all clean test
