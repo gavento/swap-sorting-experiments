@@ -1,1 +1,8 @@
 __pycache__
+*.pickle*
+*.swp
+N*.png
+IND*.png
+Shuff*.png
+*.so
+.cache
