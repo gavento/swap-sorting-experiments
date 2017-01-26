@@ -14,8 +14,10 @@ class RandomSort {
 public:
     RandomSort(double p, int r, std::vector<int> const &seq, int sampling=-1, int seed=42):
         _p(p), _r(r), _n(seq.size()), _rnd(seed), _Is(), _Ws(), _Ts(), _T(0),
-        _sampling(sampling > 0 ? sampling : std::max((int)(ET() / 1000), 1))
-    { }
+        _sampling(sampling > 0 ? sampling : std::max((int)(ET() / 1000), 1)), _seq(seq)
+    {
+        assert((_n >= 1) && (_r >= 1) && (_p >= 0.0) && (_p <= 1.0));
+    }
 
     RandomSort(double p, int r, py::list l, int sampling=-1, int seed=42):
         RandomSort(p, r, std::vector<int>(py::stl_input_iterator<int>(l), py::stl_input_iterator<int>()), sampling, seed)
@@ -25,7 +27,7 @@ public:
         RandomSort(p, r, std::vector<int>(n), sampling, seed)
     {
         for (int i = 0; i < _n; i++)
-            _seq.push_back(i);
+            _seq[i] = i;
         std::shuffle(_seq.begin(), _seq.end(), _rnd);
     }
 
@@ -85,6 +87,7 @@ public:
         return run(ET() * 10, std::max((int)(ET() / 50), 8), 0.0, conv_on_I);
     }
 
+
     int I() const
     {
         int r = 0;
@@ -111,23 +114,27 @@ public:
     }
 
 public:
-    int _n, _r, _sampling, _T;
     double _p;
+    int _r, _n;
     std::minstd_rand _rnd;
-    std::vector<int> _seq;
     std::vector<int> _Is, _Ws, _Ts;
+    int _T, _sampling;
+    std::vector<int> _seq;
 
     int step()
     {
         if (_n <= 1) return 0;
-        int a = std::uniform_int_distribution<>(0, _n - 1)(_rnd);
-        int b = std::uniform_int_distribution<>(std::max(a - _r, 0), std::min(a + _r, _n - 2))(_rnd);
-        if (b >= a) {
-            b++;
-        } else {
+
+        int a, b;
+        do {
+            a = std::uniform_int_distribution<>(0, _n - 1)(_rnd);
+            b = std::uniform_int_distribution<>(a - _r, a + _r)(_rnd);
+        } while ((b < 0) || (b >= _n) || (b == a));
+
+        if (b < a)
             std::swap(a, b);
-        }
         assert((0 <= a) && (a < b) && (b < _n));
+
         if (!(_seq[a] < _seq[b]) == !(std::uniform_real_distribution<>(0.0, 1.0)(_rnd) < _p)) {
             std::swap(_seq[a], _seq[b]);
             return 1;
