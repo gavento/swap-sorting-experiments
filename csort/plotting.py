@@ -8,7 +8,9 @@ import logging
 import math
 import pandas
 from dask import delayed, compute
-import dask.multiprocessing
+import dask.dataframe as dd
+import dask.multiprocessing, dask.bag
+from scoop import futures
 
 try:
     import csort
@@ -17,16 +19,22 @@ except ImportError as e:
 
 try:
     from distributed import LocalCluster, Client
-    cluster = LocalCluster(4, 1)
-    client = Client(cluster)
+#    cluster = LocalCluster(4, 1)
+#    client = Client(cluster)
 except ImportError as e:
     raise ImportError("Module distributed not found (needed for parallel processing)") from e
 
 mc = joblib.Memory(cachedir='.cache', verbose=0)
 
+#################3
+def main():
+    fig_lim_by_r();
+
+
 @mc.cache
 def lim_times(p, r, n, samples, use_I=True, label=None):
     dfs = []
+    print('computing:', p, r, samples)
     for i in range(samples):
         rs = csort.RandomSort(p, r, n, -1, hash((p, r, n, i)) % 2**30)
         T = rs.run_conv(use_I)
@@ -37,8 +45,11 @@ def lim_times(p, r, n, samples, use_I=True, label=None):
             'T/n^2': T / n ** 2, 'I/n': rs.Is[-1] / n, 'W/n': rs.Ws[-1] / n,
             })
     df = pandas.DataFrame(dfs)
-    print('done:', p, r)
+    print('done:', p, r, samples)
     return df
+
+def lim_times2(p, r, n, samples, use_I=True, label=None):
+    return lim_times(p, r, n, samples, use_I=use_I, label=label)
 
 def fig_lim_by_r():
     sns.set_context('paper', rc={"lines.linewidth": 1.1, 'lines.markeredgewidth': 0.1}, font_scale=1.3)
@@ -47,16 +58,16 @@ def fig_lim_by_r():
 
     n = 512
     smp = 100
-    dfs = []
     markers = ['s','D','o','^','v']
+    dfs = []
     for p in [0.05, 0.1, 0.2, 0.3]:
         ys = []
         xs = []
         for i, r in enumerate([1, 2, 4, 8, 16, 32, 64, 128, 256, 512]):
-            df0 = delayed(lim_times, name=str((p, r, n, smp)))(p, r, n, smp)
-            dfs.append(df0)
-    df = delayed(pandas.concat)((dfs,))
-    df = compute(df)
+#            df0 = delayed(lim_times)(p, r, n, smp)
+            dfs.append((p, r, n, smp))
+    dfs = futures.map(lim_times2, *list(zip(*dfs)))
+    df = pandas.concat(dfs)
     dfavg = df.groupby((df.p, df.r, df.n), as_index=False).mean()
 
     plt.clf()
@@ -170,3 +181,6 @@ def plot_sorting_process(df, value='log_N(E)', title=None, ymax=None, ax=None):
     
     return df
 
+
+if __name__ == '__main__':
+    main()
