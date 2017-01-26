@@ -28,7 +28,7 @@ except ImportError as e:
 mc = joblib.Memory(cachedir='.cache', verbose=0)
 
 @mc.cache
-def process_time_cached(p, r, n, steps, samples):
+def process_time_cached(p, r, n, steps, samples, label=None):
     dfs = []
     for i in range(samples):
         rs = csort.RandomSort(p, r, n, max(steps // 30, 1), hash((p, r, n, i)) % 2**30)
@@ -40,29 +40,31 @@ def process_time_cached(p, r, n, steps, samples):
             }))
     return pandas.concat(dfs)
 
-def process_time(p, r, n, steps, samples):
-    return process_time_cached(p, r, n, steps, samples)
+def process_time(p, r, n, steps, samples, label=None):
+    return process_time_cached(p, r, n, steps, samples, label=label)
+
+
+def lim_times_part(p, r, n, i, label=None):
+    rs = csort.RandomSort(p, r, n, -1, hash((p, r, n, i)) % 2**30)
+    T = rs.converge_on_I(-1, 0.05)
+    I = rs.I_stab()
+    W = rs.W_stab()
+    return {
+        'p': p, 'r': r, 'n': n, 'sample': i,
+        'label': label or ("p = %g r = %d n = %d" % (p,r,n)),
+        'T': T, 'I': I, 'W': W,
+        'T/n': T / n, 'I/n': I / n, 'W/n': W / n,
+        'T/n^2': T / n ** 2, 'I/n^2': I / n ** 2, 'W/n^2': W / n ** 2,
+        'W/n^3': W / n ** 3,
+        }
 
 @mc.cache
-def lim_times_cached(p, r, n, samples, use_I=True, label=None):
-    dfs = []
-    for i in range(samples):
-        rs = csort.RandomSort(p, r, n, -1, hash((p, r, n, i)) % 2**30)
-        T = rs.run_conv(use_I)
-        rs.steps(T // 2)
-        dfs.append({
-            'p': p, 'r': r, 'n': n, 'sample': i,
-            'label': label or ("p = %g r = %d n = %d" % (p,r,n)),
-            'T': T, 'I': rs.Is[-1], 'W': rs.Ws[-1],
-            'T/n': T / n, 'I/n': rs.Is[-1] / n, 'W/n': rs.Ws[-1] / n,
-            'T/n^2': T / n ** 2, 'I/n^2': rs.Is[-1] / n ** 2, 'W/n^2': rs.Ws[-1] / n ** 2,
-            'W/n^3': rs.Ws[-1] / n ** 3,
-            })
-    df = pandas.DataFrame(dfs)
-    return df
+def lim_times_cached(p, r, n, samples, label=None):
+    dfs = Parallel(n_jobs=-2, verbose=2, pre_dispatch='all')([delayed(lim_times_part)(p, r, n, i, label) for i in range(samples)])
+    return pandas.DataFrame(dfs)
 
-def lim_times(p, r, n, sample, use_I=True, label=None):
-    return lim_times_cached(p, r, n, sample, use_I=use_I, label=label)
+def lim_times(p, r, n, samples, label=None):
+    return lim_times_cached(p, r, n, samples, label=label)
 
 #################3
 
@@ -75,12 +77,15 @@ def fig_rn_lim_by_n():
 
     smp = 100
     markers = ['s','D','o','^','v']
-    dfs_par = []
-    for p in [0.05, 0.1, 0.15, 0.2]:
-        for n in [32, 64, 128, 256, 512, 1024, 2048]:
-            dfs_par.append((p, n, n, smp))
+    dfs = []
+    ps = [0.05, 0.1, 0.15, 0.2]
+    ns = [32, 64, 128, 256, 512, 1024, 2048]
+    for p in ps:
+        for n in ns:
+            r = n
+            logging.info("Parallel: done %d of %d jobs.", len(dfs), len(ps) * len(ns))
+            dfs.append(lim_times(p, r, n, smp))
 
-    dfs = Parallel(n_jobs=-1, verbose=5, pre_dispatch='all')([delayed(lim_times)(*pars) for pars in dfs_par])
     df = pandas.concat(dfs)
     dfavg = df.groupby((df.p, df.r, df.n), as_index=False).mean()
 
@@ -89,7 +94,7 @@ def fig_rn_lim_by_n():
     sns.pointplot(y='I/n^2', x='n', hue='p', data=df, markers=markers, dodge=True)
     sns.pointplot(y='W/n^3', x='n', hue='p', data=df, markers=markers, linestyles='--', dodge=True)
     sns.despine(right=True, top=True, offset=1, trim=True)
-    plt.legend(loc=0, title="n")
+    plt.legend(loc=0, title="p")
     plt.tight_layout()
     plt.savefig('fig-rn-lim-IW-by-n_s100.pdf', dpi=200)
 
@@ -103,24 +108,27 @@ def fig_rn_lim_by_n():
 
 def fig_r1_lim_by_p():
     r = 1
-    smp = 500
+    smp = 100
     markers = ['s','D','o','^','v']
-    dfs_par = []
+    dfs = []
     ps = np.arange(0.0, 0.41, 0.05)
+    ns = [64, 512]
     for p in ps:
-        for n in [64, 128, 256]:
-            dfs_par.append((p, r, n, smp))
+        for n in ns:
+            logging.info("Parallel: done %d of %d jobs.", len(dfs), len(ps) * len(ns))
+            dfs.append(lim_times(p, r, n, smp))
 
-    dfs = Parallel(n_jobs=-1, verbose=5, pre_dispatch='all')([delayed(lim_times)(*pars) for pars in dfs_par])
     df = pandas.concat(dfs)
     dfavg = df.groupby((df.p, df.r, df.n), as_index=False).mean()
     
-    dfun = pandas.DataFrame({'p': ps, 'EI/n': [2*p*(1-p)/(3*p-1)**2 for p in ps]})
+    dfun2 = pandas.DataFrame({'p': ps, 'EW/n': [2*p*(1-p)/(1-2*p)**2 for p in ps]})
+    dfun3 = pandas.DataFrame({'p': ps, 'EW/n': [2*p*(1-p)/(1-3*p)**2 for p in ps]})
 
     set_sns()
     plt.clf()
     sns.pointplot(y='I/n', x='p', hue='n', data=df, markers=markers, dodge=True)
-    sns.pointplot(y='EI/n', x='p', data=dfun, color='black')
+    sns.pointplot(y='EW/n', x='p', data=dfun3, markers='+', color='black')
+    sns.pointplot(y='EW/n', x='p', data=dfun2, markers='x', color='gray')
     sns.pointplot(y='W/n', x='p', hue='n', data=df, markers=markers, linestyles='--', dodge=True)
     plt.ylim(ymin = -0, ymax=3)
     sns.despine(right=True, top=True, offset=1, trim=True)
@@ -132,12 +140,14 @@ def fig_r1_lim_by_n():
     r = 1
     smp = 100
     markers = ['s','D','o','^','v']
-    dfs_par = []
-    for p in [0.05, 0.1, 0.15, 0.2]:
-        for n in [32, 64, 128, 256, 512, 1024]:
-            dfs_par.append((p, r, n, smp))
+    dfs = []
+    ps = [0.05, 0.1, 0.15, 0.2]
+    ns = [32, 64, 128, 256, 512, 1024]
+    for p in ps:
+        for n in ns:
+            logging.info("Parallel: done %d of %d jobs.", len(dfs), len(ps) * len(ns))
+            dfs.append(lim_times(p, r, n, smp))
 
-    dfs = Parallel(n_jobs=-1, verbose=5, pre_dispatch='all')([delayed(lim_times)(*pars) for pars in dfs_par])
     df = pandas.concat(dfs)
     dfavg = df.groupby((df.p, df.r, df.n), as_index=False).mean()
 
@@ -166,10 +176,13 @@ def fig_lim_by_r():
     smp = 100
     markers = ['s','D','o','^','v']
     dfs = []
-    for p in [0.05, 0.1, 0.2, 0.3]:
-        for r in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]:
-            dfs.append((p, r, n, smp))
-    dfs = map(lim_times, *list(zip(*dfs)))
+    ps = [0.05, 0.1, 0.2, 0.3]
+    rs = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+    for p in ps:
+        for r in rs:
+            logging.info("Parallel: done %d of %d jobs.", len(dfs), len(ps) * len(rs))
+            dfs.append(lim_times(p, r, n, smp))
+
     df = pandas.concat(dfs)
     dfavg = df.groupby((df.p, df.r, df.n), as_index=False).mean()
 
@@ -198,7 +211,7 @@ def fig_lim_by_r():
 #########################
 
 def plot_time(p, r, n, steps, samples, marker='.', color='blue', label=None, value='I'):
-    df = process_time(p, r, n, steps, samples)
+    df = process_time(p, r, n, steps, samples, label=label)
     sns.tsplot(df, time='T', value=value, ci=[99], unit='sample',
             condition='label', err_style=None, estimator=np.mean, marker=marker, color=color)
     return df
@@ -207,10 +220,11 @@ def fig_process_by_r(v='I'):
     set_sns()
     cs = sns.color_palette("Set1")
 
-    T = 130000
+    T = 140000
     n = 512
     p = 0.1
     smp = 100
+    plt.clf()
     plot_time(p, 1, n, T, smp, 's', cs[0], '1', value=v)
     plot_time(p, 4, n, T, smp, 'D', cs[1], '4', value=v)
     plot_time(p, 16, n, T, smp, 'o', cs[2], '16', value=v)
@@ -229,10 +243,11 @@ def fig_process_by_p(v='I'):
     set_sns()
     cs = sns.color_palette("Set1")
 
-    T = 1200000
+    T = 1400000
     n = 512
     r = 1
     smp = 100
+    plt.clf()
     plot_time(0.0, r, n, T, smp, 's', cs[0], '0.0', value=v)
     plot_time(0.1, r, n, T, smp, 'D', cs[1], '0.1', value=v)
     plot_time(0.2, r, n, T, smp, 'o', cs[2], '0.2', value=v)
@@ -248,9 +263,17 @@ def fig_process_by_p(v='I'):
 
 
 if __name__ == '__main__':
-    fig_rn_lim_by_n()
-    fig_r1_lim_by_p()
-    fig_r1_lim_by_n()
-    fig_lim_by_r()
-    fig_process_by_n()
+    import sys
+    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG, format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
+    logging.info("Running fig_process_by_r ...")
+    fig_process_by_r()
+    logging.info("Running fig_process_by_p ...")
     fig_process_by_p()
+    logging.info("Running fig_lim_by_r ...")
+    fig_lim_by_r()
+    logging.info("Running fig_r1_lim_by_p ...")
+    fig_r1_lim_by_p()
+    logging.info("Running fig_r1_lim_by_n ...")
+    fig_r1_lim_by_n()
+    logging.info("Running fig_rn_lim_by_n ...")
+    fig_rn_lim_by_n()

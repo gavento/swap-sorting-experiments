@@ -7,6 +7,7 @@
 #include <vector>
 #include <algorithm>
 #include <numeric>
+#include <cmath>
 
 namespace py = boost::python;
 
@@ -16,6 +17,8 @@ public:
         _p(p), _r(r), _n(seq.size()), _rnd(seed), _Is(), _Ws(), _Ts(), _T(0),
         _sampling(sampling > 0 ? sampling : std::max((int)(ET() / 1000), 1)), _seq(seq)
     {
+        if (_r > _n)
+            _r = _n;
         assert((_n >= 1) && (_r >= 1) && (_p >= 0.0) && (_p <= 1.0));
     }
 
@@ -33,7 +36,7 @@ public:
 
     double ET() const
     {
-        return 1.0 * _n * _n / _r / (0.5 - _p) / 2;
+        return 0.5 * (1 + 0.25 * std::log2(_r)) * _n * _n / _r / (0.5 - _p);
     }
 
     int steps(int k)
@@ -57,36 +60,49 @@ public:
         return r;
     }
 
-    int run(int max_steps, int conv_window=-1, double conv_error=0.05, bool conv_on_I=true)
+    int converge_on_I(int conv_window=-1, double rel_error=0.05)
     {
-        int wsize = 0;
-        if (conv_window > 0) {
-            wsize = (conv_window + _sampling - 1) / _sampling;
-            if (wsize < 8) {
-                fprintf(stderr, "WARNING: wsize only %d (with n=%d, ET=%d, conv_window=%d, sampling=%d)\n",
-                        wsize, _n, (int)(ET()), conv_window, _sampling);
-            }
+        if (conv_window <= 0) {
+            conv_window = (int)(4 * ET() * rel_error);
+        }
+        int win_samples = std::max(conv_window / _sampling, 8);
+        if (win_samples <= 8) {
+            fprintf(stderr, "WARNING: win_samples only %d (with n=%d, ET=%d, conv_window=%d, rel_error=%f, sampling=%d)\n",
+                    win_samples, _n, (int)(ET()), conv_window, rel_error, _sampling);
         }
 
-        for (int s = 0; _T < max_steps; s++) {
+        while (true) {
             steps(_sampling);
-            if ((conv_window > 0) && (_T > 2 * wsize * _sampling)) {
-                auto end = conv_on_I ? _Is.end() : _Ws.end();
-                double mean1 = std::accumulate(end - 2 * wsize, end - 1 * wsize, 0.0) / (double) wsize;
-                double mean2 = std::accumulate(end - 1 * wsize, end - 0 * wsize, 0.0) / (double) wsize;
-                if (mean1 < mean2 * (1.0 + conv_error))
-                    return _T - (3 * wsize / 2);
+            int Ttest = _T / 2 - 10000 - conv_window;
+            if (Ttest > 0) {
+                int Stest = Ttest / _sampling;
+                double mean_window = std::accumulate(_Is.begin() + Stest, _Is.begin() + Stest + win_samples, 0.0) / (double) win_samples;
+                double mean_stable = I_stab();
+                if (mean_window <= mean_stable * (1.0 + rel_error)) {
+/*                    fprintf(stderr, "DEBUG: Converged with T=%d, Ttest=%d, Stest=%d, Ewindow=%f, Estable=%f.\n",
+                            _T, Ttest, Stest, mean_window, mean_stable);
+*/                    return Ttest;
+                }
+            }
+            if (_T > ET() * 20 + 1000000) {
+                fprintf(stderr, "FATAL: more that 20*E[T] steps taken. Aborting. (with p=%f, r=%d, n=%d, ET=%d, T=%d, conv_window=%d, rel_error=%f, sampling=%d)\n",
+                        _p, _r, _n, (int)(ET()), _T, conv_window, rel_error, _sampling);
+                throw NULL;
             }
         }
-
-        return -1;
     }
 
-    int run_conv(bool conv_on_I=true)
+    double I_stab() const
     {
-        return run(ET() * 10, std::max((int)(ET() / 50), 8), 0.0, conv_on_I);
+        int spls = _Is.size() / 4;
+        return std::accumulate(_Is.end() - spls, _Is.end(), 0.0) / (double)(spls);
     }
 
+    double W_stab() const
+    {
+        int spls = _Ws.size() / 4;
+        return std::accumulate(_Ws.end() - spls, _Ws.end(), 0.0) / (double)(spls);
+    }
 
     int I() const
     {
@@ -162,11 +178,12 @@ BOOST_PYTHON_MODULE(csort)
             .def_readonly("Ws", &RandomSort::_Ws)
             .def_readonly("Ts", &RandomSort::_Ts)
             .def("steps", &RandomSort::steps)
-            .def("run", &RandomSort::run)
-            .def("run_conv", &RandomSort::run_conv)
+            .def("converge_on_I", &RandomSort::converge_on_I)
             .def("ET", &RandomSort::ET)
             .def("I", &RandomSort::I)
             .def("W", &RandomSort::W)
+            .def("I_stab", &RandomSort::I_stab)
+            .def("W_stab", &RandomSort::W_stab)
             .def("__str__", &RandomSort::info_str)
             .def("__repr__", &RandomSort::info_str)
             ;
