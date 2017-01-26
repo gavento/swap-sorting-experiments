@@ -7,11 +7,20 @@ import itertools
 import logging
 import math
 import pandas
+from dask import delayed, compute
+import dask.multiprocessing
 
 try:
     import csort
 except ImportError as e:
     raise ImportError("Module csort not found, compile 'csort.so' with 'make'") from e
+
+try:
+    from distributed import LocalCluster, Client
+    cluster = LocalCluster(4, 1)
+    client = Client(cluster)
+except ImportError as e:
+    raise ImportError("Module distributed not found (needed for parallel processing)") from e
 
 mc = joblib.Memory(cachedir='.cache', verbose=0)
 
@@ -28,9 +37,10 @@ def lim_times(p, r, n, samples, use_I=True, label=None):
             'T/n^2': T / n ** 2, 'I/n': rs.Is[-1] / n, 'W/n': rs.Ws[-1] / n,
             })
     df = pandas.DataFrame(dfs)
+    print('done:', p, r)
     return df
 
-def fig_lim_by_r(v='I'):
+def fig_lim_by_r():
     sns.set_context('paper', rc={"lines.linewidth": 1.1, 'lines.markeredgewidth': 0.1}, font_scale=1.3)
     sns.set_style("ticks")
     cs = sns.color_palette("Set1")
@@ -43,10 +53,10 @@ def fig_lim_by_r(v='I'):
         ys = []
         xs = []
         for i, r in enumerate([1, 2, 4, 8, 16, 32, 64, 128, 256, 512]):
-            print(p, r)
-            df0 = lim_times(p, r, n, smp, use_I=True)
+            df0 = delayed(lim_times, name=str((p, r, n, smp)))(p, r, n, smp)
             dfs.append(df0)
-    df = pandas.concat(dfs)
+    df = delayed(pandas.concat)((dfs,))
+    df = compute(df)
     dfavg = df.groupby((df.p, df.r, df.n), as_index=False).mean()
 
     plt.clf()
