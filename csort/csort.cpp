@@ -34,9 +34,20 @@ public:
         std::shuffle(_seq.begin(), _seq.end(), _rnd);
     }
 
+    double Er() const
+    {
+        int swaps = 0, len = 0;
+        for (int i = 1; i <= _r && i < _n; i++) {
+            swaps += _n - i;
+            len += (_n - i) * i;
+        }
+        return 1.0 * len / swaps;
+    }
+
     double ET() const
     {
-        return 0.5 * (1 + 0.25 * std::log2(_r)) * _n * _n / _r / (0.5 - _p);
+        //return 0.5 * (1 + 0.25 * std::log2(_r)) * _n * _n / _r / (0.5 - _p);
+        return _n * _n / _r / (1.0 - 2.0 * _p);
     }
 
     int steps(int k)
@@ -60,10 +71,10 @@ public:
         return r;
     }
 
-    int converge_on_I(int conv_window=-1, double rel_error=0.05)
+    int converge(double rel_error, int conv_window, bool on_I)
     {
         if (conv_window <= 0) {
-            conv_window = (int)(4 * ET() * rel_error);
+            conv_window = (int)(ET() / 100);
         }
         int win_samples = std::max(conv_window / _sampling, 8);
         if (win_samples <= 8) {
@@ -76,20 +87,34 @@ public:
             int Ttest = _T / 2 - 10000 - conv_window;
             if (Ttest > 0) {
                 int Stest = Ttest / _sampling;
-                double mean_window = std::accumulate(_Is.begin() + Stest, _Is.begin() + Stest + win_samples, 0.0) / (double) win_samples;
-                double mean_stable = I_stab();
+                auto bg = on_I ? _Is.begin() : _Ws.begin();
+                double mean_window = std::accumulate(bg + Stest, bg + Stest + win_samples, 0.0) / (double) win_samples;
+                double mean_stable = on_I ? I_stab() : W_stab();
                 if (mean_window <= mean_stable * (1.0 + rel_error)) {
-/*                    fprintf(stderr, "DEBUG: Converged with T=%d, Ttest=%d, Stest=%d, Ewindow=%f, Estable=%f.\n",
+#ifdef DEBUG
+                    fprintf(stderr, "DEBUG: Converged with T=%d, Ttest=%d, Stest=%d, E[window]=%f, E[stable]=%f.\n",
                             _T, Ttest, Stest, mean_window, mean_stable);
-*/                    return Ttest;
+#endif /* DEBUG */
+                    return Ttest;
                 }
             }
             if (_T > ET() * 20 + 1000000) {
-                fprintf(stderr, "FATAL: more that 20*E[T] steps taken. Aborting. (with p=%f, r=%d, n=%d, ET=%d, T=%d, conv_window=%d, rel_error=%f, sampling=%d)\n",
+                fprintf(stderr, "FATAL: more that 20*E[T] steps taken, aborting. "
+                        "(p=%f, r=%d, n=%d, ET=%d, T=%d, conv_window=%d, rel_error=%f, sampling=%d)\n",
                         _p, _r, _n, (int)(ET()), _T, conv_window, rel_error, _sampling);
                 throw NULL;
             }
         }
+    }
+
+    int converge_on_I(double rel_error=0.05, int conv_window=-1)
+    {
+        return converge(rel_error, conv_window, true);
+    }
+
+    int converge_on_W(double rel_error=0.05, int conv_window=-1)
+    {
+        return converge(rel_error, conv_window, false);
     }
 
     double I_stab() const
@@ -179,7 +204,9 @@ BOOST_PYTHON_MODULE(csort)
             .def_readonly("Ts", &RandomSort::_Ts)
             .def("steps", &RandomSort::steps)
             .def("converge_on_I", &RandomSort::converge_on_I)
+            .def("converge_on_W", &RandomSort::converge_on_W)
             .def("ET", &RandomSort::ET)
+            .def("Er", &RandomSort::Er)
             .def("I", &RandomSort::I)
             .def("W", &RandomSort::W)
             .def("I_stab", &RandomSort::I_stab)
