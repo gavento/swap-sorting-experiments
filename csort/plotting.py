@@ -159,7 +159,7 @@ def fig_IW_by_p_r1():
     with sns_plot("fig_IW_by_p-r1-s%s" % (smp, )):
         sns.pointplot(y='Inorm', x='p', hue='n', data=df, markers=markers, dodge=True)
         sns.pointplot(y='Wnorm', x='p', hue='n', data=df, markers=markers, linestyles='--', dodge=True)
-        sns.pointplot(y='EW/n', x='p', data=dfun3, markers='+', color='black', label='Theor. bound on E[W]')
+        sns.pointplot(y='EW/n', x='p', data=dfun2, markers='+', color='black', label='Theor. bound on E[W]')
         plt.ylim(ymin = 0)
         sns.despine(right=True, top=True, offset=1, trim=True)
         plt.legend(loc=0, title="n")
@@ -167,7 +167,7 @@ def fig_IW_by_p_r1():
 def fig_IW_by_p_rn():
     smp = SMP
     markers = ['s','D','o','^','v']
-    ps = np.arange(0.0, 0.21, 0.05)
+    ps = np.arange(0.02, 0.21, 0.02)
     ns = [64, 512]
     dfs = []
     for p in ps:
