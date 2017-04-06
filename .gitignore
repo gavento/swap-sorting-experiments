@@ -6,3 +6,5 @@ IND*.png
 Shuff*.png
 *.so
 .cache
+csort/fig*.png
+csort/fig*.pdf
